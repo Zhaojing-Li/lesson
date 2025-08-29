@@ -7,7 +7,8 @@ import asyncio
 import os
 
 # 从系统环境变量中获取高德地图 api key
-AMAP_MAPS_API_KEY=os.getenv('AMAP_MAPS_API_KEY')
+# AMAP_MAPS_API_KEY=os.getenv('AMAP_MAPS_API_KEY')
+AMAP_MAPS_API_KEY = "0979546891085b2223ec67458b6ecd2d"
 
 # 为 stdio 连接创建服务器参数
 server_params = StdioServerParameters(

@@ -30,6 +30,7 @@ class Configuration:
     # 初始化对象，并加载环境变量
     def __init__(self) -> None:
         # 加载环境变量
+        print("加载环境变量")
         self.load_env()
         self.base_url = os.getenv("LLM_BASE_URL")
         self.api_key = os.getenv("DASHSCOPE_API_KEY")

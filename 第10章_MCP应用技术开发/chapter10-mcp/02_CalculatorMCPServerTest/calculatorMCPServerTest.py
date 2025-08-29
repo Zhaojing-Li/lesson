@@ -39,7 +39,7 @@ async def run():
             # 文件相关功能测试
             add_result = await session.call_tool("add", arguments={"a":6, "b":3})
             subtract_result = await session.call_tool("subtract", arguments={"a":6, "b":3})
-            multiply_result = await session.call_tool("multiply", arguments={"a":6, "b":3})
+            multiply_result = await session.call_tool("multi ply", arguments={"a":6, "b":3})
             divide_result = await session.call_tool("divide", arguments={"a":6, "b":3})
             print(f"add_result:{add_result}/n/n")
             print(f"subtract_result:{subtract_result}/n/n")
