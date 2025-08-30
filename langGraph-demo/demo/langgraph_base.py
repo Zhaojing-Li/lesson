@@ -97,8 +97,7 @@ graph_builder.add_node("tools", tool_node)
 
 # 添加边
 graph_builder.add_edge(START, "agent")  #普通边
-
-graph_builder.add_conditional_edges("agent", should_continue) #条件边
+graph_builder.add_conditional_edges("agent", should_continue,{True: "tools", False: END}) #条件边
 graph_builder.add_edge("tools", "agent") 
 # 如果没有工具调用，就结束
 graph_builder.add_edge("agent", END)
