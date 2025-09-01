@@ -10,7 +10,7 @@ def base_node(state:dict,config:RunnableConfig):
 
 
 def other_node(state: dict):
-    return state
+    return state 
 
 
 # 添加节点

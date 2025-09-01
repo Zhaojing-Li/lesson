@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>隐私号平台 - AI智能处理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+            min-height: 600px;
+        }
+
+        .input-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            border: 2px solid #e9ecef;
+        }
+
+        .input-section h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .input-group input, .input-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input:focus, .input-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s, box-shadow 0.3s;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .process-section {
+            background: #fff;
+            border-radius: 15px;
+            padding: 25px;
+            border: 2px solid #e9ecef;
+        }
+
+        .process-section h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+
+
+        .reasoning-display {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            height: 100%;
+            overflow-y: auto;
+            border-left: 4px solid #667eea;
+        }
+        
+        .thinking-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #fff3cd;
+            border-radius: 6px;
+            border-left: 3px solid #ffc107;
+        }
+        
+        .thinking-section h4 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .result-section {
+            padding: 15px;
+            background: #d1ecf1;
+            border-radius: 6px;
+            border-left: 3px solid #17a2b8;
+        }
+        
+        .result-section h4 {
+            color: #0c5460;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        
+        .stream-item {
+            margin-bottom: 8px;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        
+        .thinking-item {
+            background: #fffbf0;
+            border-left: 2px solid #ffc107;
+        }
+        
+        .result-item-stream {
+            background: #f0f9ff;
+            border-left: 2px solid #17a2b8;
+        }
+
+        .reasoning-display h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .reasoning-item {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+
+        .reasoning-item .timestamp {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+
+        .confirmation-dialog {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .confirmation-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .confirmation-content h3 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .confirmation-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .btn-confirm {
+            flex: 1;
+            background: #28a745;
+        }
+
+        .btn-cancel {
+            flex: 1;
+            background: #dc3545;
+        }
+
+        .result-display {
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+            border: 2px solid #28a745;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .result-display h3 {
+            color: #155724;
+            margin-bottom: 15px;
+        }
+
+        .result-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .result-item {
+            background: white;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #28a745;
+        }
+
+        .result-item strong {
+            color: #155724;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .result-info {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔒 隐私号平台</h1>
+        </div>
+
+        <div class="main-content">
+            <!-- 输入区域 -->
+            <div class="input-section">
+                <h2>
+                    <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>
+                        <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z"/>
+                    </svg>
+                    请求输入
+                </h2>
+                
+                <div class="input-group">
+                    <label for="userInput">请描述您的隐私号生成需求：</label>
+                    <textarea id="userInput" rows="4" placeholder="例如：帮我为手机号13812345678生成一个可回拨的隐私号"></textarea>
+                </div>
+
+                <button class="btn" id="submitBtn" onclick="submitRequest()">
+                    🚀 开始处理
+                </button>
+
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    <p>AI正在思考中...</p>
+                </div>
+            </div>
+
+            <!-- AI推理过程区域 -->
+            <div class="process-section">
+                <h2>
+                    <svg class="icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    AI推理过程
+                </h2>
+
+                <div class="reasoning-display">
+                    <div class="thinking-section">
+                        <h4>🤔 模型思考过程</h4>
+                        <div id="thinkingContent">
+                            <p style="color: #856404; text-align: center; padding: 10px; font-size: 12px;">等待模型思考...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="result-section">
+                        <h4>✨ 推理结果</h4>
+                        <div id="resultContent">
+                            <p style="color: #0c5460; text-align: center; padding: 10px; font-size: 12px;">等待处理开始...</p>
+                        </div>
+                    </div>
+                    
+                    <div id="reasoningContent">
+                        <!-- 保留原有的推理过程显示区域 -->
+                    </div>
+                </div>
+
+                <!-- 结果展示区域 -->
+                <div class="result-display" id="resultDisplay">
+                    <h3>✅ 处理完成</h3>
+                    <div class="result-info" id="resultInfo">
+                        <!-- 结果内容将动态填充 -->
+                    </div>
+                    <div id="resultInstructions">
+                        <!-- 使用说明将动态填充 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 人机交互确认对话框 -->
+    <div class="confirmation-dialog" id="confirmationDialog">
+        <div class="confirmation-content">
+            <h3>🤝 需要您的确认</h3>
+            <p id="confirmationMessage"></p>
+            <div class="confirmation-buttons">
+                <button class="btn btn-confirm" onclick="confirmAction(true)">✅ 确认</button>
+                <button class="btn btn-cancel" onclick="confirmAction(false)">❌ 取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentThreadId = generateThreadId();
+        let currentState = {};
+
+        function generateThreadId() {
+            return 'thread_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+
+        async function submitRequest() {
+            const userInput = document.getElementById('userInput').value.trim();
+            if (!userInput) {
+                alert('请输入您的需求');
+                return;
+            }
+
+            // 显示加载状态
+            showLoading(true);
+            addReasoningItem('开始处理用户请求：' + userInput);
+
+            try {
+                const response = await fetch('/api/process', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_input: userInput,
+                        thread_id: currentThreadId
+                    })
+                });
+
+                const result = await response.json();
+                await handleProcessResult(result);
+
+            } catch (error) {
+                console.error('处理错误:', error);
+                addReasoningItem('处理过程中发生错误：' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function handleProcessResult(result) {
+            currentState = result;
+            
+            // 更新流式数据显示
+            if (result.stream_data && result.stream_data.length > 0) {
+                result.stream_data.forEach(streamItem => {
+                    displayStreamItem(streamItem);
+                });
+            }
+            
+            // 更新推理过程显示
+            if (result.reasoning_process) {
+                result.reasoning_process.forEach(process => {
+                    addReasoningItem(process);
+                });
+            }
+
+            // 检查是否需要重新输入
+            if (result.need_reinput) {
+                showReinputDialog(result.confirmation_message, result.reinput_reason);
+            }
+            // 检查是否需要人机交互确认
+            else if (result.need_human_confirmation) {
+                showConfirmationDialog(result.confirmation_message);
+            } else if (result.step === 'completed') {
+                showResult(result);
+            }
+        }
+
+
+
+        function displayStreamItem(streamItem) {
+            const { type, content, stage, timestamp } = streamItem;
+            
+            if (type === 'thinking') {
+                // 显示思考过程
+                const thinkingContent = document.getElementById('thinkingContent');
+                
+                // 清空默认文本
+                if (thinkingContent.textContent.includes('等待模型思考')) {
+                    thinkingContent.innerHTML = '';
+                }
+                
+                const thinkingItem = document.createElement('div');
+                thinkingItem.className = 'stream-item thinking-item';
+                thinkingItem.innerHTML = `
+                    <div style="font-size: 11px; color: #856404; margin-bottom: 3px;">${new Date(timestamp).toLocaleTimeString()} - ${stage}</div>
+                    <div>${content}</div>
+                `;
+                
+                thinkingContent.appendChild(thinkingItem);
+                thinkingContent.scrollTop = thinkingContent.scrollHeight;
+                
+            } else if (type === 'content') {
+                // 显示推理结果
+                const resultContent = document.getElementById('resultContent');
+                
+                // 清空默认文本
+                if (resultContent.textContent.includes('等待处理开始')) {
+                    resultContent.innerHTML = '';
+                }
+                
+                const resultItem = document.createElement('div');
+                resultItem.className = 'stream-item result-item-stream';
+                resultItem.innerHTML = `
+                    <div style="font-size: 11px; color: #0c5460; margin-bottom: 3px;">${new Date(timestamp).toLocaleTimeString()} - ${stage}</div>
+                    <div>${content}</div>
+                `;
+                
+                resultContent.appendChild(resultItem);
+                resultContent.scrollTop = resultContent.scrollHeight;
+            }
+        }
+        
+        function showReinputDialog(message, reason) {
+            const confirmationDialog = document.getElementById('confirmationDialog');
+            const confirmationMessage = document.getElementById('confirmationMessage');
+            
+            confirmationMessage.innerHTML = `
+                <div style="color: #dc3545; margin-bottom: 10px; font-weight: bold;">⚠️ 需要重新输入</div>
+                <div style="margin-bottom: 15px;">${message}</div>
+                <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; font-size: 14px; color: #6c757d;">
+                    原因：${reason}
+                </div>
+            `;
+            
+            // 修改按钮文本
+            const confirmBtn = document.querySelector('.btn-confirm');
+            const cancelBtn = document.querySelector('.btn-cancel');
+            confirmBtn.textContent = '🔄 重新输入';
+            cancelBtn.textContent = '❌ 取消';
+            
+            confirmationDialog.style.display = 'flex';
+        }
+        function addReasoningItem(content, type = 'info') {
+            const reasoningContent = document.getElementById('reasoningContent');
+            
+            const item = document.createElement('div');
+            item.className = 'reasoning-item';
+            
+            const timestamp = new Date().toLocaleTimeString();
+            item.innerHTML = `
+                <div class="timestamp">${timestamp}</div>
+                <div>${content}</div>
+            `;
+            
+            reasoningContent.appendChild(item);
+            reasoningContent.scrollTop = reasoningContent.scrollHeight;
+        }
+        
+        async function confirmAction(confirmed) {
+            hideConfirmationDialog();
+            
+            // 检查是否是重新输入确认
+            if (currentState.need_reinput && confirmed) {
+                // 重新输入模式，清空输入框并聚焦
+                const userInput = document.getElementById('userInput');
+                userInput.value = '';
+                userInput.focus();
+                userInput.placeholder = '请重新输入您的需求，确保包含完整的手机号和隐私号类型...';
+                
+                // 清空显示区域
+                document.getElementById('thinkingContent').innerHTML = '<p style="color: #856404; text-align: center; padding: 10px; font-size: 12px;">等待模型思考...</p>';
+                document.getElementById('resultContent').innerHTML = '<p style="color: #0c5460; text-align: center; padding: 10px; font-size: 12px;">等待处理开始...</p>';
+                
+                addReasoningItem('🔄 系统已重置，请重新输入您的需求');
+                return;
+            }
+            
+            const response = confirmed ? '确认' : '取消';
+            addReasoningItem(`用户响应：${response}`);
+
+            showLoading(true);
+
+            try {
+                const result = await fetch('/api/continue', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_response: response,
+                        thread_id: currentThreadId
+                    })
+                });
+
+                const data = await result.json();
+                await handleProcessResult(data);
+
+            } catch (error) {
+                console.error('确认处理错误:', error);
+                addReasoningItem('确认处理过程中发生错误：' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function showConfirmationDialog(message) {
+            document.getElementById('confirmationMessage').textContent = message;
+            document.getElementById('confirmationDialog').style.display = 'flex';
+        }
+
+        function hideConfirmationDialog() {
+            document.getElementById('confirmationDialog').style.display = 'none';
+        }
+
+
+
+        function showResult(result) {
+            const resultDisplay = document.getElementById('resultDisplay');
+            const resultInfo = document.getElementById('resultInfo');
+            const resultInstructions = document.getElementById('resultInstructions');
+
+            // 填充结果信息
+            resultInfo.innerHTML = `
+                <div class="result-item">
+                    <strong>被调查人员手机号：</strong><br>
+                    ${result.phone_number || '未提供'}
+                </div>
+                <div class="result-item">
+                    <strong>生成的隐私号：</strong><br>
+                    ${result.privacy_number || '未生成'}
+                </div>
+                <div class="result-item">
+                    <strong>隐私号类型：</strong><br>
+                    ${result.privacy_type || '未指定'}
+                </div>
+                <div class="result-item">
+                    <strong>处理时间：</strong><br>
+                    ${new Date().toLocaleString()}
+                </div>
+            `;
+
+            // 填充使用说明
+            const isCallable = result.privacy_type === '可回拨';
+            resultInstructions.innerHTML = `
+                <h4 style="color: #155724; margin-bottom: 10px;">📋 使用说明：</h4>
+                <ul style="color: #155724; margin-left: 20px;">
+                    <li>请拨打隐私号 <strong>${result.privacy_number}</strong> 联系被调查人员</li>
+                    <li>对方将看到隐私号显示，无法获取您的真实号码</li>
+                    <li>${isCallable ? '对方可以回拨此隐私号联系您' : '对方无法回拨此隐私号'}</li>
+                    <li>请妥善保管隐私号，确保调查工作顺利进行</li>
+                </ul>
+            `;
+
+            resultDisplay.style.display = 'block';
+            addReasoningItem('✅ 隐私号生成完成，处理流程结束');
+        }
+
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (show) {
+                loading.style.display = 'block';
+                submitBtn.disabled = true;
+                submitBtn.textContent = '处理中...';
+            } else {
+                loading.style.display = 'none';
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 开始处理';
+            }
+        }
+
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            addReasoningItem('🤖 隐私号AI助手已准备就绪，请输入您的需求');
+            
+            // 给输入框添加回车事件
+            document.getElementById('userInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submitRequest();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

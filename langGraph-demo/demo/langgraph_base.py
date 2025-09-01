@@ -1,3 +1,7 @@
+from langchain_core.messages.utils import AnyMessage
+
+
+from ast import List
 from typing import Literal
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
@@ -10,7 +14,6 @@ from pydantic import SecretStr
 from IPython.display import Image, display
 import os
 import sys
-
 
 # 深度思考模式配置（qwen-plus with reasoning）
 chat_model_reasoning = ChatTongyi(
@@ -35,7 +38,6 @@ chat_model_no_reasoning = ChatTongyi(
     }
 )
 
-
 @tool
 def query_weather(query: str) -> str:
     """Query weather info for a place and return a short summary."""
@@ -45,14 +47,6 @@ def query_weather(query: str) -> str:
     return "明天天晴"
 
 
-
-tools = [query_weather]
-# 构建工具节点
-tool_node = ToolNode(tools)
-# 模型绑定工具（注意：返回一个新的 Runnable，需要用该对象来调用）
-llm_with_tools = chat_model_no_reasoning.bind_tools(tools)
-
-
 # 系统提示：指导模型在天气/城市相关问题时必须调用 query_weather工具
 SYSTEM_PROMPT = (
     "你是一个善用工具的助手。遇到与天气、城市、上海等相关的查询时，必须优先调用名为 `query_weather` 的工具，"
@@ -60,7 +54,15 @@ SYSTEM_PROMPT = (
 )
 
 
-def should_continue(state: MessagesState) -> Literal["tools",END]:
+
+def filter_messages(messages: MessagesState) :
+    """
+    获取最近三条消息
+    """
+    return messages['messages'][-3:]
+
+
+def should_continue(state: MessagesState) -> Literal["tools", END]:
     """
     决定是否继续使用工具节点
     """
@@ -76,7 +78,7 @@ def call_model(state: MessagesState):
     调用模型, 传输的是全部的消息列表， state["messages"] 获取的是全部的消息列表。
     首轮若没有系统提示，则自动注入一条系统提示，强制模型优先调用工具。
     """
-    messages = state["messages"]
+    messages: list[AnyMessage] = filter_messages(state)
     if not messages or not isinstance(messages[0], SystemMessage):
         messages = [SystemMessage(content=SYSTEM_PROMPT)] + messages
     return {"messages": [llm_with_tools.invoke(messages)]}
@@ -85,6 +87,12 @@ def call_model(state: MessagesState):
 #创建 Graph，构建流程图，
 # ! 将消息状态处理器传递,可以传递多种类型参数（dict,list,tuple）
 graph_builder = StateGraph(MessagesState)
+
+tools = [query_weather]
+# 构建工具节点
+tool_node = ToolNode(tools)
+# 模型绑定工具（注意：返回一个新的 Runnable，需要用该对象来调用）
+llm_with_tools = chat_model_no_reasoning.bind_tools(tools)
 
 
 # 添加节点  
@@ -118,6 +126,8 @@ print(final_state['messages'][-1].content)
 
 
 
+
+
 def image_display():
     # 终端环境下：将流程图渲染为 PNG 文件并尝试打开
     try:
@@ -128,13 +138,7 @@ def image_display():
         # macOS 自动打开
         if sys.platform == "darwin":
             os.system(f'open "{out_path}"')
-        elif sys.platform.startswith("linux"):
-            os.system(f'xdg-open "{out_path}" >/dev/null 2>&1 || echo "Saved to {out_path}"')
-        elif sys.platform.startswith("win"):
-            os.startfile(out_path)  # type: ignore
         print(f"流程图已保存：{out_path}")
     except Exception as e:
         print(f"渲染流程图失败：{e}")
         print("你可以改用 graph.get_graph().draw_mermaid() 打印 Mermaid 文本在终端查看。")
-
-
