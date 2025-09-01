@@ -392,7 +392,7 @@
             addReasoningItem('开始处理用户请求：' + userInput);
 
             try {
-                const response = await fetch('/api/process', {
+                const response = await fetch('http://localhost:5002/api/process', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -440,7 +440,7 @@
             if (step === 'completed') {
                 // 直接完成，显示结果
                 showResult(result);
-            } else if (result.need_reinput || result.needs_reinput) {
+            } else if (result.need_reinput) {
                 // 需要重新输入
                 showReinputDialog(result.confirmation_message, result.reinput_reason);
             } else if (result.need_human_confirmation) {
@@ -572,7 +572,7 @@
             showLoading(true);
 
             try {
-                const result = await fetch('/api/continue', {
+                const result = await fetch('http://localhost:5002/api/continue', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -611,7 +611,7 @@
             showLoading(true);
 
             try {
-                const result = await fetch('/api/continue', {
+                const result = await fetch('http://localhost:5002/api/continue', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -634,8 +634,21 @@
         }
 
         function showConfirmationDialog(message) {
-            document.getElementById('confirmationMessage').textContent = message;
-            document.getElementById('confirmationDialog').style.display = 'flex';
+            const confirmationDialog = document.getElementById('confirmationDialog');
+            const confirmationMessage = document.getElementById('confirmationMessage');
+            const typeSelectionDialog = document.getElementById('typeSelectionDialog');
+            
+            // 检查是否需要显示类型选择对话框
+            if (message && message.includes('隐私号类型')) {
+                // 隐藏通用确认对话框，显示类型选择对话框
+                confirmationDialog.style.display = 'none';
+                typeSelectionDialog.style.display = 'flex';
+            } else {
+                // 显示通用确认对话框
+                confirmationMessage.textContent = message || '需要您的确认';
+                confirmationDialog.style.display = 'flex';
+                typeSelectionDialog.style.display = 'none';
+            }
         }
 
         function hideConfirmationDialog() {

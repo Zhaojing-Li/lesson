@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Optional, Literal, TypedDict, Annotated
 from datetime import datetime
 from pydantic import BaseModel, SecretStr
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langchain_community.chat_models.tongyi import ChatTongyi
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt, Command
@@ -98,7 +99,7 @@ class PrivacyNumberAgent:
         return workflow.compile(checkpointer=self.memory)
     
 
-    async def _analyze_input(self, state: PrivacyNumberState) -> PrivacyNumberState:
+    async def _analyze_input(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
         """分析用户输入，进行语义理解与推理"""
         user_input = state["user_input"]
         
@@ -229,7 +230,7 @@ class PrivacyNumberAgent:
         return state
     
 
-    async def _handle_confirmation(self, state: PrivacyNumberState) -> PrivacyNumberState:
+    async def _handle_confirmation(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
         """统一处理各种确认场景"""
         # 组织中断负载，告知前端需要何种确认
         confirm_type = state.get("pending_confirmation_type")
@@ -262,7 +263,7 @@ class PrivacyNumberAgent:
         return state
     
     
-    async def _generate_privacy_number(self, state: PrivacyNumberState) -> PrivacyNumberState:
+    async def _generate_privacy_number(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
         """生成隐私号（模拟实现）"""
         phone = state["phone_number"]
         privacy_type = state["privacy_type"]
@@ -285,7 +286,7 @@ class PrivacyNumberAgent:
         
         return state
     
-    async def _present_result(self, state: PrivacyNumberState) -> PrivacyNumberState:
+    async def _present_result(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
         """展示最终结果"""
         phone = state["phone_number"]
         privacy_type = state["privacy_type"] 
@@ -379,30 +380,20 @@ class PrivacyNumberAgent:
             last = event
         return last
     
-    async def continue_conversation(self, user_response: str, thread_id: str = "default") -> Dict[str, Any]:
-        """继续对话（处理用户确认回复）"""
-        # 获取当前状态
+    async def resume_with_response(self, user_response: str, thread_id: str = "default") -> Dict[str, Any]:
+        """恢复被中断的对话，传入用户响应"""
+        from langgraph.types import Command
+        
         graph_config = {"configurable": {"thread_id": thread_id}}
-        current_state = await self.graph.aget_state(graph_config)
         
-        # 根据用户回复更新状态
-        state = current_state.values
-        state["user_input"] = user_response
-        
-        # 处理确认回复
-        if "awaiting_confirmation" in state.get("step", ""):
-            await self._process_confirmation_response(state, user_response)
-        
-        # 继续执行工作流（恢复中断）
+        # 使用Command.resume恢复执行工作流
         async for event in self.graph.astream(Command(resume=user_response), config=graph_config, stream_mode="values"):
+            # 捕获新的中断
             if "__interrupt__" in event:
                 payload = event["__interrupt__"]
                 if isinstance(payload, list) and payload:
                     payload = payload[0]
-                # 再次需要确认
-                cur_state = (await self.graph.aget_state(graph_config)).values
                 return {
-                    **cur_state,
                     "need_human_confirmation": True,
                     "confirmation_message": payload.get("message"),
                     "pending_confirmation_type": payload.get("type"),
@@ -459,7 +450,7 @@ class PrivacyNumberAgent:
         """解析流式响应块,区分thinking和content"""
         try:
             result = {}
-            reasoning_content = chunk.additional_kwargs.get('reasoning_content',str)
+            reasoning_content = chunk.additional_kwargs.get('reasoning_content', '')
             content = chunk.content 
             
             if reasoning_content: 
