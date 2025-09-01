@@ -392,7 +392,7 @@
             addReasoningItem('开始处理用户请求：' + userInput);
 
             try {
-                const response = await fetch('http://localhost:5002/api/process', {
+                const response = await fetch('http://localhost:5003/api/process', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -572,7 +572,7 @@
             showLoading(true);
 
             try {
-                const result = await fetch('http://localhost:5002/api/continue', {
+                const result = await fetch('http://localhost:5003/api/continue', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -611,7 +611,7 @@
             showLoading(true);
 
             try {
-                const result = await fetch('http://localhost:5002/api/continue', {
+                const result = await fetch('http://localhost:5003/api/continue', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -646,6 +646,30 @@
             } else {
                 // 显示通用确认对话框
                 confirmationMessage.textContent = message || '需要您的确认';
+                
+                // 根据消息内容设置按钮文本
+                const confirmBtn = document.querySelector('.btn-confirm');
+                const cancelBtn = document.querySelector('.btn-cancel');
+                
+                if (message && (
+                    (message.includes('被调查人员') && message.includes('手机号')) ||
+                    message.includes('是否为被调查人员的号码') ||
+                    message.includes('请确认此手机号') ||
+                    (message.includes('手机号') && message.includes('是否'))
+                )) {
+                    // 手机号归属确认
+                    confirmBtn.textContent = '✅ 是';
+                    cancelBtn.textContent = '❌ 否';
+                } else if (message && (message.includes('重新输入') || message.includes('需要重新'))) {
+                    // 重新输入确认
+                    confirmBtn.textContent = '🔄 重新输入';
+                    cancelBtn.textContent = '❌ 取消';
+                } else {
+                    // 默认确认
+                    confirmBtn.textContent = '✅ 确认';
+                    cancelBtn.textContent = '❌ 取消';
+                }
+                
                 confirmationDialog.style.display = 'flex';
                 typeSelectionDialog.style.display = 'none';
             }

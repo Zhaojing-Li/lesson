@@ -1,3 +1,10 @@
+#!/usr/bin/env python3
+"""
+隐私号处理Agent - 同步版本
+解决 "Called get_config outside of a runnable context" 错误
+"""
+import os
+import sys
 import re
 import json
 from typing import Dict, Any, List, Optional, Literal, TypedDict, Annotated
@@ -16,7 +23,7 @@ import config
 
 
 class PrivacyNumberState(TypedDict):
-    """隐私号处理状态定义 - 优化版"""
+    """隐私号处理状态定义 - 同步版"""
     user_input: str
     phone_number: Optional[str]
     privacy_type: Optional[Literal["可回拨", "不可回拨"]]
@@ -33,26 +40,26 @@ class PrivacyNumberState(TypedDict):
     pending_confirmation_type: Optional[str]
 
 
-class PrivacyNumberAgent:
-    """隐私号处理Agent主类"""
+class SyncPrivacyNumberAgent:
+    """隐私号处理Agent - 同步版本"""
     
     def __init__(self):
         """初始化Agent"""
         # 创建配置实例
         cfg = config.Config()
         
+        # 同步版本的模型配置
         self.chat_model = ChatTongyi(
             model=cfg.llm_config.model,  
             api_key=SecretStr(cfg.llm_config.api_key),
             top_p=0.8,         
-            streaming=True,   
+            streaming=False,   # 改为非流式输出
             model_kwargs={
                 "temperature": 0.5,      
                 "enable_thinking": True,
                 "thinking_budget": 500
             }
         )
-        print(f"获取到qwen的配置:{cfg.llm_config.api_key}")
         
         # 创建内存检查点
         self.memory = MemorySaver()
@@ -61,10 +68,10 @@ class PrivacyNumberAgent:
         
     
     def _build_graph(self):
-        """构建简化的LangGraph工作流"""
+        """构建同步的LangGraph工作流"""
         workflow = StateGraph(PrivacyNumberState)
         
-        # 添加节点
+        # 添加节点 - 使用同步方法
         workflow.add_node("input_analysis", self._analyze_input)
         workflow.add_node("handle_confirmation", self._handle_confirmation)
         workflow.add_node("generate_privacy_number", self._generate_privacy_number)
@@ -73,7 +80,6 @@ class PrivacyNumberAgent:
         # 定义流程边
         workflow.add_edge(START, "input_analysis")
         
-
         workflow.add_conditional_edges(
             "input_analysis",
             self._decide_next_step,
@@ -83,7 +89,6 @@ class PrivacyNumberAgent:
             }
         )
         
-       
         workflow.add_conditional_edges(
             "handle_confirmation",
             self._decide_after_confirmation,
@@ -96,16 +101,19 @@ class PrivacyNumberAgent:
         workflow.add_edge("generate_privacy_number", "result_presentation")
         workflow.add_edge("result_presentation", END)
         
-        return workflow.compile(checkpointer=self.memory)
+        end_graph = workflow.compile(checkpointer=self.memory)
+
+        self.image_display(end_graph)
+        return end_graph
     
 
-    async def _analyze_input(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
-        """分析用户输入，进行语义理解与推理"""
+    def _analyze_input(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
+        """分析用户输入，进行语义理解与推理 - 同步版本"""
         user_input = state["user_input"]
         
-        # 构建简化的分析提示
+        # 构建分析提示
         analysis_prompt = f"""
-        你是隐私号平台的AI助手.具备精准的语义理解和业务判断能力。请分析用户请求并给出明确的下一步动作。
+        你是隐私号平台的AI助手，具备精准的语义理解和业务判断能力。请分析用户请求并给出明确的下一步动作。
 
         隐私号业务说明：
         - 调查员输入被调查人员手机号，平台生成中转路由号码
@@ -113,6 +121,13 @@ class PrivacyNumberAgent:
         - 被调查人员看到隐私号，而非调查员真实号码
         - 隐私号类型：可回拨（可回拨给调查员）、不可回拨（无法回拨）
 
+        对用户输入的判断顺序：
+        1. 判断是否是业务无关（如问候、知识问答等）
+        2. 判断是否是被调查人的手机号
+        3. 判断是否明确了隐私号类型（可回拨，不可回拨）
+        4. 判断是否是信息完整，可直接生成隐私号
+
+        提示词：
         用户输入：{user_input}
 
         请分析并返回JSON格式结果：
@@ -129,55 +144,43 @@ class PrivacyNumberAgent:
         2. phone_confirm：有手机号但未明确说明是被调查人员号码
         3. type_confirm：有手机号但未明确隐私号类型
         4. generate：信息完整，可直接生成隐私号
+        
+        特别注意：如果输入中包含"隐私号类型：可回拨"或"隐私号类型：不可回拨"，说明用户已经确认了类型，应该直接进入generate阶段。
         """
         
-        # 使用流式输出获取模型响应
-        thinking_content = []
-        final_content = []
-        
-        async for chunk in self.chat_model.astream([
-            HumanMessage(content=analysis_prompt)
-        ]):
-            # 解析流式响应，区分thinking和content
-            chunk_data = self._parse_stream_chunk(chunk)
-            if chunk_data:
-                # 处理thinking内容
-                if chunk_data.get("thinking"):
-                    thinking_content.append(chunk_data['thinking'])
-                
-                # 处理content内容
-                if chunk_data.get("content"):
-                    final_content.append(chunk_data["content"])
-                    
-        
-        # 合并最终结果
-        full_response = "".join(final_content)
-        
-        # 记录推理过程
-        # if thinking_content:
-        #     thinking_summary = "".join(thinking_content)
-        #     state["reasoning_process"].append(f"输入分析阶段思考过程：{thinking_summary}")
-        
-        # if final_content:
-        #     state["reasoning_process"].append(f"输入分析阶段最终结果：{full_response}")
-        
-        # 将流式内容进行汇总后仅推送少量记录，避免前端出现大量一行一条
-        # 思考过程（合并）
-        if thinking_content:
-            state["stream_data"].append({
-                "timestamp": datetime.now().isoformat(),
-                "stage": "思考分析",
-                "type": "thinking",
-                "content": "".join(thinking_content)
-            })
-        # 最终结果（合并）
-        if full_response:
+        # 使用同步调用模型
+        try:
+            response = self.chat_model.invoke([HumanMessage(content=analysis_prompt)])
+            
+            # 处理响应内容
+            full_response = response.content
+            
+            # 记录处理过程
+            state["reasoning_process"].append(f"输入分析完成：{user_input}")
+            
+            # 如果有thinking内容，也记录
+            if hasattr(response, 'additional_kwargs') and 'reasoning_content' in response.additional_kwargs:
+                thinking_content = response.additional_kwargs['reasoning_content']
+                if thinking_content:
+                    state["stream_data"].append({
+                        "timestamp": datetime.now().isoformat(),
+                        "stage": "思考分析",
+                        "type": "thinking",
+                        "content": thinking_content
+                    })
+            
+            # 记录最终结果
             state["stream_data"].append({
                 "timestamp": datetime.now().isoformat(),
                 "stage": "输出结果",
                 "type": "content",
                 "content": full_response
             })
+            
+        except Exception as e:
+            print(f"模型调用错误: {e}")
+            # 使用简单的正则表达式作为后备方案
+            return self._fallback_analysis(state)
         
         # 解析JSON结果
         try:
@@ -189,9 +192,8 @@ class PrivacyNumberAgent:
             else:
                 raise ValueError("未找到有效的JSON")
         except (json.JSONDecodeError, ValueError) as e:
-            # JSON解析失败，使用后备分析
-            raise ValueError("未找到有效的JSON")
-        
+            print(f"JSON解析失败: {e}")
+            return self._fallback_analysis(state)
 
         # 根据分析结果更新状态
         action = analysis_result.get("action", "reinput")
@@ -230,8 +232,45 @@ class PrivacyNumberAgent:
         return state
     
 
-    async def _handle_confirmation(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
-        """统一处理各种确认场景"""
+    def _fallback_analysis(self, state: PrivacyNumberState) -> PrivacyNumberState:
+        """后备分析方案 - 使用正则表达式"""
+        user_input = state["user_input"]
+        
+        # 提取手机号
+        phone_pattern = r'1[3-9]\d{9}'
+        phones = re.findall(phone_pattern, user_input)
+        
+        # 检查隐私号类型
+        privacy_type = None
+        if "隐私号类型：可回拨" in user_input or "可回拨" in user_input:
+            privacy_type = "可回拨"
+        elif "隐私号类型：不可回拨" in user_input or "不可回拨" in user_input:
+            privacy_type = "不可回拨"
+        
+        if not phones:
+            state["need_reinput"] = True
+            state["reinput_reason"] = "未检测到有效手机号"
+            state["need_human_confirmation"] = True
+            state["confirmation_message"] = "请提供被调查人员的手机号码"
+            state["pending_confirmation_type"] = "reinput"
+        elif not privacy_type:
+            state["phone_number"] = phones[0]
+            state["need_human_confirmation"] = True
+            state["confirmation_message"] = "请选择隐私号类型：可回拨或不可回拨"
+            state["pending_confirmation_type"] = "type_confirm"
+        else:
+            state["phone_number"] = phones[0]
+            state["privacy_type"] = privacy_type
+            state["need_human_confirmation"] = False
+            state["pending_confirmation_type"] = None
+        
+        state["reasoning_process"].append(f"后备分析完成：手机号={phones}, 类型={privacy_type}")
+        state["step"] = "input_analysis_completed"
+        return state
+
+
+    def _handle_confirmation(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
+        """统一处理各种确认场景 - 同步版本"""
         # 组织中断负载，告知前端需要何种确认
         confirm_type = state.get("pending_confirmation_type")
         # 尝试推断
@@ -254,7 +293,7 @@ class PrivacyNumberAgent:
 
         # 当从 resume 恢复时，user_response 包含用户的回复
         # 处理用户响应
-        await self._process_confirmation_response(state, user_response)
+        self._process_confirmation_response(state, user_response)
 
         # 标记
         state["step"] = "confirmation_processed"
@@ -263,8 +302,8 @@ class PrivacyNumberAgent:
         return state
     
     
-    async def _generate_privacy_number(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
-        """生成隐私号（模拟实现）"""
+    def _generate_privacy_number(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
+        """生成隐私号 - 同步版本"""
         phone = state["phone_number"]
         privacy_type = state["privacy_type"]
         
@@ -272,11 +311,11 @@ class PrivacyNumberAgent:
         if not phone:
             raise ValueError("手机号不能为空")
             
-        # 模拟隐私号生成逻辑
+        # 生成隐私号逻辑
         if privacy_type == "可回拨":
-            privacy_number = await self._generate_callable_privacy_number(phone)
+            privacy_number = self._generate_callable_privacy_number(phone)
         else:
-            privacy_number = await self._generate_non_callable_privacy_number(phone)
+            privacy_number = self._generate_non_callable_privacy_number(phone)
             
         state["privacy_number"] = privacy_number
         state["step"] = "privacy_number_generated"
@@ -286,66 +325,59 @@ class PrivacyNumberAgent:
         
         return state
     
-    async def _present_result(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
-        """展示最终结果"""
-        phone = state["phone_number"]
-        privacy_type = state["privacy_type"] 
-        privacy_number = state["privacy_number"]
-        
-        result_message = f"""
-        ✅ 隐私号生成成功！
-        
-        📞 被调查人员手机号：{phone}
-        🔒 生成的隐私号：{privacy_number}
-        📋 隐私号类型：{privacy_type}
-        
-        📌 使用说明：
-        - 请拨打隐私号 {privacy_number} 联系被调查人员
-        - 对方将看到隐私号显示，无法获取您的真实号码
-        {'- 对方可以回拨此隐私号联系您' if privacy_type == '可回拨' else '- 对方无法回拨此隐私号'}
-        
-        💡 推理过程回顾：
-        {chr(10).join(f"{i+1}. {step}" for i, step in enumerate(state["reasoning_process"]))}
-        """
-        
+
+    def _present_result(self, state: PrivacyNumberState, config: RunnableConfig = None) -> PrivacyNumberState:
+        """展示最终结果 - 同步版本"""
         state["step"] = "completed"
         return state
     
+
     # 条件判断函数
     def _decide_next_step(self, state: PrivacyNumberState) -> str:
         """决定分析后的下一步"""
-        
         if state.get("need_reinput") or state.get("need_human_confirmation"):
             return "handle_confirmation"
-        # 信息完整，直接生成
         return "generate_privacy_number"
     
+
     def _decide_after_confirmation(self, state: PrivacyNumberState) -> str:
-        """确认后的路由：若需要重新输入则停止；否则回到再分析（ReAct循环）。"""
+        """确认后的路由"""
         if state.get("need_reinput"):
             return "wait"
-        # 确认结束后回到输入分析，让模型基于新信息再次判断下一步
+        
+        # 如果用户刚刚确认了隐私号类型，需要重新分析以规划下一步
+        if state.get("pending_confirmation_type") == "type_confirm" and state.get("privacy_type"):
+            # 重新分析以确定下一步动作
+            return "re_analyze"
+        
+        # 检查是否所有信息都已完整（手机号和隐私号类型都有了）
+        if state.get("phone_number") and state.get("privacy_type"):
+            # 信息完整，直接生成隐私号
+            return "generate_privacy_number"
+        
+        # 其他情况，重新分析
         return "re_analyze"
     
-    # 隐私号生成工具方法（模拟实现）
-    async def _generate_callable_privacy_number(self, phone: str) -> str:
+
+    # 隐私号生成工具方法
+    def _generate_callable_privacy_number(self, phone: str) -> str:
         """生成可回拨隐私号"""
-        # 模拟生成逻辑：在原号码基础上变换
         base = phone[3:7] 
         suffix = phone[7:]
         privacy_num = f"400{base}{suffix}"
         return privacy_num
     
-    async def _generate_non_callable_privacy_number(self, phone: str) -> str:
+
+    def _generate_non_callable_privacy_number(self, phone: str) -> str:
         """生成不可回拨隐私号"""
-        # 模拟生成逻辑
         base = phone[3:7]
         suffix = phone[7:] 
         privacy_num = f"300{base}{suffix}"
         return privacy_num
     
-    async def process_request(self, user_input: str, thread_id: str = "default") -> Dict[str, Any]:
-        """处理用户请求的主入口"""
+
+    def process_request(self, user_input: str, thread_id: str = "default") -> Dict[str, Any]:
+        """处理用户请求的主入口 - 同步版本"""
         initial_state = PrivacyNumberState(
             user_input=user_input,
             phone_number=None,
@@ -363,8 +395,8 @@ class PrivacyNumberAgent:
         
         graph_config = {"configurable": {"thread_id": thread_id}}
         
-        # 执行工作流（支持中断捕获）
-        async for event in self.graph.astream(initial_state, config=graph_config, stream_mode="values"):
+        # 使用同步的 stream 方法
+        for event in self.graph.stream(initial_state, config=graph_config, stream_mode="values"):
             # 捕获中断，返回给前端
             if "__interrupt__" in event:
                 payload = event["__interrupt__"]
@@ -380,14 +412,15 @@ class PrivacyNumberAgent:
             last = event
         return last
     
-    async def resume_with_response(self, user_response: str, thread_id: str = "default") -> Dict[str, Any]:
-        """恢复被中断的对话，传入用户响应"""
+
+    def resume_with_response(self, user_response: str, thread_id: str = "default") -> Dict[str, Any]:
+        """恢复被中断的对话 - 同步版本"""
         from langgraph.types import Command
         
         graph_config = {"configurable": {"thread_id": thread_id}}
         
-        # 使用Command.resume恢复执行工作流
-        async for event in self.graph.astream(Command(resume=user_response), config=graph_config, stream_mode="values"):
+        # 使用同步的 stream 方法
+        for event in self.graph.stream(Command(resume=user_response), config=graph_config, stream_mode="values"):
             # 捕获新的中断
             if "__interrupt__" in event:
                 payload = event["__interrupt__"]
@@ -402,8 +435,9 @@ class PrivacyNumberAgent:
             last = event
         return last
     
-    async def _process_confirmation_response(self, state: PrivacyNumberState, response: str):
-        """处理用户确认回复"""
+
+    def _process_confirmation_response(self, state: PrivacyNumberState, response: str):
+        """处理用户确认回复 - 同步版本"""
         response_lower = response.lower()
         pending_type = state.get("pending_confirmation_type") or ""
 
@@ -416,14 +450,17 @@ class PrivacyNumberAgent:
                 state["need_human_confirmation"] = False
                 state["confirmation_message"] = None
                 state["pending_confirmation_type"] = None
-                # 但不清空原有信息，等待新输入
                 return
         
-        # 处理手机号确认（基于类型而非提示文案）
+        # 处理手机号确认
         if pending_type == "phone_confirm":
+            original_input = state.get("user_input", "")
+            
             if "是" in response or "yes" in response_lower or "确认" in response:
                 state["need_human_confirmation"] = False
                 state["pending_confirmation_type"] = None
+                enhanced_input = f"{original_input}， 已确认是被调查人员的手机号；"
+
             else:
                 # 用户否认，需要重新输入手机号
                 state["phone_number"] = None
@@ -433,35 +470,53 @@ class PrivacyNumberAgent:
                 state["confirmation_message"] = "需要重新输入手机号"
                 state["pending_confirmation_type"] = "reinput"
         
-        # 处理隐私号类型确认
+        # 处理隐私号类型确认 - 按照ReAct模式，将确认信息作为补充重新进入分析
         elif pending_type == "type_confirm":
-            if "1" in response or "可回拨" in response:
-                state["privacy_type"] = "可回拨"
-                state["need_human_confirmation"] = False
-                state["pending_confirmation_type"] = None
-            elif "2" in response or "不可回拨" in response:
-                state["privacy_type"] = "不可回拨"
-                state["need_human_confirmation"] = False
-                state["pending_confirmation_type"] = None
-    
-
-
-    def _parse_stream_chunk(self, chunk) -> dict:
-        """解析流式响应块,区分thinking和content"""
-        try:
-            result = {}
-            reasoning_content = chunk.additional_kwargs.get('reasoning_content', '')
-            content = chunk.content 
+            # 将用户的类型选择作为补充信息，重新构建输入进行分析
+            original_input = state.get("user_input", "")
+            phone_number = state.get("phone_number", "")
             
-            if reasoning_content: 
-                result["thinking"] = reasoning_content
-            if content:
-                result["content"] = content
-            return result
-                    
-        except Exception as e:
-            print(f"解析流式响应块错误: {e}")
-            return None
+            # 根据用户响应确定类型
+            if "1" in response or "可回拨" in response or "选择可回拨类型" in response:
+                privacy_type = "可回拨"
+            elif "2" in response or "不可回拨" in response or "选择不可回拨类型" in response:
+                privacy_type = "不可回拨"
+            else:
+                # 如果用户输入不明确，保持当前状态等待进一步确认
+                return
+            
+            # 构建包含类型信息的完整输入
+            enhanced_input = f"{original_input} 隐私号类型：{privacy_type}"
+            
+            # 更新状态中的输入，准备重新分析
+            state["user_input"] = enhanced_input
+            state["phone_number"] = phone_number  # 保持已确认的手机号
+            state["privacy_type"] = privacy_type  # 设置用户选择的类型
+            state["need_human_confirmation"] = False
+            # 保持pending_confirmation_type为"type_confirm"，让_decide_after_confirmation知道需要重新分析
+            state["pending_confirmation_type"] = "type_confirm"
+            
+            # 记录处理过程
+            state["reasoning_process"].append(f"用户确认类型：{privacy_type}")
+            state["stream_data"].append({
+                "timestamp": datetime.now().isoformat(),
+                "stage": "类型确认",
+                "type": "content",
+                "content": f"用户选择隐私号类型：{privacy_type}"
+            })
     
-
-   
+    
+    def image_display(self, graph):
+        # 终端环境下：将流程图渲染为 PNG 文件并尝试打开
+        try:
+            png_bytes = graph.get_graph().draw_mermaid_png()
+            out_path = os.path.join(os.path.dirname(__file__), "graph.png")
+            with open(out_path, "wb") as f:
+                f.write(png_bytes)
+            # macOS 自动打开
+            if sys.platform == "darwin":
+                os.system(f'open "{out_path}"')
+            print(f"流程图已保存：{out_path}")
+        except Exception as e:
+            print(f"渲染流程图失败：{e}")
+            print("你可以改用 graph.get_graph().draw_mermaid() 打印 Mermaid 文本在终端查看。")
