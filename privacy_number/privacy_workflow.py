@@ -25,15 +25,12 @@ class PrivacyWorkflowState(TypedDict):
     """隐私号处理工作流状态定义"""
     # 用户输入
     user_input: str
-    
-    # 业务核心数据
+    # 核心数据
     phone_number: Optional[str]  # 被调查人手机号
     privacy_type: Optional[Literal["可回拨", "不可回拨"]]  # 隐私号类型
     privacy_number: Optional[str]  # 生成的隐私号
-    
     # 流程控制
     current_step: str  # 当前执行步骤
-    
     # 思考过程记录
     thinking_process: List[Dict[str, Any]]  # 记录每个节点的思考过程
 
@@ -53,7 +50,8 @@ class PrivacyWorkflow:
             streaming=True,
             model_kwargs={
                 "temperature": 0.7,
-                "enable_thinking": True
+                "enable_thinking": True,
+                "thinking_budget": 400  
             }
         )
         
@@ -63,6 +61,7 @@ class PrivacyWorkflow:
         # 构建工作流图
         self.graph = self._build_workflow_graph()
     
+
     def _build_workflow_graph(self) -> StateGraph:
         """构建4节点线性工作流图"""
         workflow = StateGraph(PrivacyWorkflowState)
@@ -133,7 +132,7 @@ class PrivacyWorkflow:
             
             if not is_relevant:
                 # 不相关，直接中断让用户重新输入
-                print(f"🛑 触发业务相关性中断")
+                print(f" 触发业务相关性中断")
                 interrupt({
                     "type": "business",
                     "message": f"您的输入似乎与隐私号业务无关。{reason}\n\n隐私号业务说明：\n- 为调查员生成隐私号保护身份\n- 输入被调查人手机号，选择可回拨或不可回拨类型\n- 获得可用于拨打的隐私号\n\n请重新输入相关的业务请求。"
@@ -143,7 +142,7 @@ class PrivacyWorkflow:
             print(f"解析结果失败: {e}")
             # 使用后备判断逻辑
             if not self._fallback_business_check(state["user_input"]):
-                print(f"🛑 触发业务相关性中断（后备逻辑）")
+                print(f" 触发业务相关性中断（后备逻辑）")
                 interrupt({
                     "type": "business", 
                     "message": "您的输入似乎与隐私号业务无关。请重新输入相关的业务请求。"
@@ -281,20 +280,20 @@ class PrivacyWorkflow:
                 interrupt({
                     "type": "type",
                     "message": f"""
-请选择隐私号类型：
+                        请选择隐私号类型：
 
-1. 可回拨隐私号
-   - 被调查人可以回拨隐私号
-   - 回拨时会路由给调查员
-   - 适合需要双向通信的调查场景
+                        1. 可回拨隐私号
+                        - 被调查人可以回拨隐私号
+                        - 回拨时会路由给调查员
+                        - 适合需要双向通信的调查场景
 
-2. 不可回拨隐私号  
-   - 被调查人无法回拨隐私号
-   - 只能调查员单向拨打
-   - 适合单向联系的调查场景
+                        2. 不可回拨隐私号  
+                        - 被调查人无法回拨隐私号
+                        - 只能调查员单向拨打
+                        - 适合单向联系的调查场景
 
-请输入 '1' 选择可回拨，或输入 '2' 选择不可回拨：
-"""
+                        请输入 '1' 选择可回拨，或输入 '2' 选择不可回拨：
+                        """
                 })
                 
         except Exception as e:
@@ -304,13 +303,13 @@ class PrivacyWorkflow:
             interrupt({
                 "type": "type",
                 "message": f"""
-请选择隐私号类型：
+                    请选择隐私号类型：
 
-1. 可回拨隐私号
-2. 不可回拨隐私号
+                    1. 可回拨隐私号
+                    2. 不可回拨隐私号
 
-请输入 '1' 选择可回拨，或输入 '2' 选择不可回拨：
-"""
+                    请输入 '1' 选择可回拨，或输入 '2' 选择不可回拨：
+                    """
             })
         
         state["current_step"] = "type_confirmation_completed"
@@ -420,6 +419,54 @@ class PrivacyWorkflow:
         matches = re.findall(phone_pattern, text)
         return matches[0] if matches else None
     
+    def _validate_phone_format(self, phone: str) -> bool:
+        """验证手机号格式是否符合11位数字"""
+        return re.match(r'1[3-9]\d{9}', phone) is not None
+    
+    def _process_user_response(self, response: str) -> str:
+        """处理和标准化用户响应"""
+        response = response.strip()
+        
+        # 检查是否是手机号（如果用户提供了新的手机号）
+        phone_pattern = r'1[3-9]\d{9}'
+        if re.match(phone_pattern, response):
+            return response  # 返回手机号本身
+        
+        # 标准化确认响应
+        if response.lower() in ['是', 'yes', 'y', '确认', '对', '正确']:
+            return "是"
+        elif response.lower() in ['否', 'no', 'n', '不是', '错误']:
+            return "否"
+        elif response in ['1']:
+            return "可回拨"  # 直接返回类型
+        elif response in ['2']:
+            return "不可回拨"  # 直接返回类型
+        
+        return response
+    
+    def _handle_phone_confirmation(self, phone: str, confirmation: str) -> bool:
+        """处理手机号确认逻辑"""
+        if confirmation == "是":
+            print(f"✅ 手机号确认成功：{phone}")
+            return True
+        else:
+            print(f"❌ 手机号被拒绝：{phone}")
+            return False
+    
+    def _handle_type_selection(self, user_choice: str) -> Optional[str]:
+        """处理隐私号类型选择逻辑"""
+        if user_choice == "1":
+            privacy_type = "可回拨"
+            print(f"✅ 选择可回拨隐私号")
+            return privacy_type
+        elif user_choice == "2":
+            privacy_type = "不可回拨"
+            print(f"✅ 选择不可回拨隐私号")
+            return privacy_type
+        else:
+            print(f"❌ 无效选择：{user_choice}")
+            return None
+    
     
     def run_workflow(self, user_input: str, thread_id: str = None) -> Dict[str, Any]:
         """运行工作流主入口"""
@@ -491,7 +538,7 @@ class PrivacyWorkflow:
         print(f" 处理后的响应：{processed_response}")
         
         try:
-            # 使用Command恢复工作流
+            # !! 使用Command恢复工作流
             result = self.graph.invoke(Command(resume=processed_response), config=config)
             
             # 检查是否还有新的中断
@@ -520,26 +567,6 @@ class PrivacyWorkflow:
             print(f" 工作流恢复失败: {e}")
             return {"error": str(e), "status": "failed"}
     
-    def _process_user_response(self, response: str) -> str:
-        """处理和标准化用户响应"""
-        response = response.strip()
-        
-        # 检查是否是手机号（如果用户提供了新的手机号）
-        phone_pattern = r'1[3-9]\d{9}'
-        if re.match(phone_pattern, response):
-            return response  # 返回手机号本身
-        
-        # 标准化确认响应
-        if response.lower() in ['是', 'yes', 'y', '确认', '对', '正确']:
-            return "是"
-        elif response.lower() in ['否', 'no', 'n', '不是', '错误']:
-            return "否"
-        elif response in ['1']:
-            return "可回拨"  # 直接返回类型
-        elif response in ['2']:
-            return "不可回拨"  # 直接返回类型
-        
-        return response
     
     def _format_final_result(self, final_state: PrivacyWorkflowState) -> Dict[str, Any]:
         """格式化最终结果"""
