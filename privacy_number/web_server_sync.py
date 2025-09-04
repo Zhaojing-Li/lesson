@@ -9,8 +9,7 @@ from datetime import datetime
 from typing import Dict, Any
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-
-from privacy_agent_sync import SyncPrivacyNumberAgent
+from privacy_number.privacy_agent_sync import SyncPrivacyNumberAgent
 
 # 创建Flask应用
 app = Flask(__name__)

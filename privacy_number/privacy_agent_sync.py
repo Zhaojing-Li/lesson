@@ -4,6 +4,7 @@
 解决 "Called get_config outside of a runnable context" 错误
 """
 import os
+from pathlib import Path
 import sys
 import re
 import json
@@ -19,7 +20,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 from langgraph.graph.message import add_messages
 from typing import Union
-import config
+from privacy_number import config
+from langfuse.langchain import CallbackHandler
+from langfuse import Langfuse, get_client
 
 
 class PrivacyNumberState(TypedDict):
@@ -48,6 +51,11 @@ class SyncPrivacyNumberAgent:
         # 创建配置实例
         cfg = config.Config()
         
+        # 初始化 Langfuse（从 .env 文件与 .env 目录加载）
+        self._init_langfuse()
+        # 回调处理器
+        self.handler = CallbackHandler()
+
         # 同步版本的模型配置
         self.chat_model = ChatTongyi(
             model=cfg.llm_config.model,  
@@ -103,7 +111,7 @@ class SyncPrivacyNumberAgent:
         
         end_graph = workflow.compile(checkpointer=self.memory)
 
-        self.image_display(end_graph)
+        # self.image_display(end_graph)
         return end_graph
     
 
@@ -150,7 +158,7 @@ class SyncPrivacyNumberAgent:
         
         # 使用同步调用模型
         try:
-            response = self.chat_model.invoke([HumanMessage(content=analysis_prompt)])
+            response = self.chat_model.invoke([HumanMessage(content=analysis_prompt)], config={"callbacks": [self.handler]})
             
             # 处理响应内容
             full_response = response.content
@@ -504,8 +512,21 @@ class SyncPrivacyNumberAgent:
                 "type": "content",
                 "content": f"用户选择隐私号类型：{privacy_type}"
             })
+
+    def _init_langfuse(self) -> None:
+        """初始化 Langfuse 客户端，兼容 .env 目录与环境变量。"""
+        try:
+            
+            Langfuse(
+                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                host=os.getenv("LANGFUSE_HOST") or os.getenv("LANGFUSE_BASE_URL")
+            )
+        except Exception as e:
+            print(f"[Langfuse] 初始化失败: {e}")
     
     
+
     def image_display(self, graph):
         # 终端环境下：将流程图渲染为 PNG 文件并尝试打开
         try:

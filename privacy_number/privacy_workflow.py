@@ -6,7 +6,8 @@
 """
 
 import os
-import sys
+from dotenv import load_dotenv
+from pathlib import Path
 import json
 import re
 import uuid
@@ -19,6 +20,10 @@ from langchain_community.chat_models.tongyi import ChatTongyi
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import interrupt, Command
 from langgraph.checkpoint.memory import MemorySaver
+from langfuse.langchain import CallbackHandler
+from langfuse import Langfuse, get_client
+
+
 
 
 class PrivacyWorkflowState(TypedDict):
@@ -46,12 +51,12 @@ class PrivacyWorkflow:
         self.thinking_model = ChatTongyi(
             model="qwen-flash",
             api_key=SecretStr(api_key),
-            top_p=0.8,
+            top_p=0.9,
             streaming=True,
             model_kwargs={
-                "temperature": 0.7,
-                "enable_thinking": True,
-                "thinking_budget": 400  
+                "temperature": 0.3,
+                "enable_thinking": False
+               # "thinking_budget": 400
             }
         )
         
@@ -60,6 +65,17 @@ class PrivacyWorkflow:
         
         # 构建工作流图
         self.graph = self._build_workflow_graph()
+
+        Langfuse(
+            secret_key="sk-lf-0c8ca4b7-e188-4803-b2d7-d710b6ba804a",
+            public_key="pk-lf-33bc5786-7976-4339-9808-ea05e03f11f6",
+            host="http://localhost:3000"
+        )
+        langfuse = get_client()
+        self.langfuse = langfuse
+        # 构建监控点
+        self.handler = CallbackHandler()
+        
     
 
     def _build_workflow_graph(self) -> StateGraph:
@@ -133,10 +149,14 @@ class PrivacyWorkflow:
             if not is_relevant:
                 # 不相关，直接中断让用户重新输入
                 print(f" 触发业务相关性中断")
-                interrupt({
+                userInput  = interrupt({
                     "type": "business",
                     "message": f"您的输入似乎与隐私号业务无关。{reason}\n\n隐私号业务说明：\n- 为调查员生成隐私号保护身份\n- 输入被调查人手机号，选择可回拨或不可回拨类型\n- 获得可用于拨打的隐私号\n\n请重新输入相关的业务请求。"
                 })
+                print(f"用户输入: {userInput}")
+                state["user_input"] = userInput
+                return self._check_business_relevance(state, config)
+
             
         except Exception as e:
             print(f"解析结果失败: {e}")
@@ -193,20 +213,27 @@ class PrivacyWorkflow:
             
             if not has_phone:
                 # 没有手机号，需要用户提供
-                print(f"🛑 触发手机号中断")
-                interrupt({
+                print(f" 触发手机号中断")
+                userInput = interrupt({
                     "type": "phone",
                     "message": f"未能识别到有效的手机号码。{reason}\n请提供被调查人员的手机号码（11位数字，如：13812345678）"
                 })
-                
+                print(f"用户输入: {userInput}")
+                state["user_input"] = f"{state['user_input']};用户重新输入被调查人员的手机号为：{userInput}"
+                return self._confirm_phone_number(state, config)
+
+
             elif not is_explicit or needs_confirmation:
                 # 有手机号但需要确认是否为被调查人的
                 print(f"🛑 触发手机号确认中断")
-                interrupt({
+                user_input = interrupt({
                     "type": "phone",
                     "message": f"检测到手机号：{phone_number}\n请确认这是被调查人员的手机号吗？\n输入 '是' 或 '否'",
                     "phone_number": phone_number
                 })
+                print(f"用户输入: {user_input}")
+                state["user_input"] = f"{state['user_input']}; 用户确认手机号是被调查人员的手机号结果：{user_input}"
+                return self._confirm_phone_number(state, config)
                 
         except Exception as e:
             print(f"解析结果失败: {e}")
@@ -214,14 +241,14 @@ class PrivacyWorkflow:
             phone = self._fallback_extract_phone(state["user_input"])
             if phone:
                 state["phone_number"] = phone
-                print(f"🛑 触发手机号确认中断（后备逻辑）")
+                print(f" 触发手机号确认中断（后备逻辑）")
                 interrupt({
                     "type": "phone",
                     "message": f"检测到手机号：{phone}\n请确认这是被调查人员的手机号吗？\n输入 '是' 或 '否'",
                     "phone_number": phone
                 })
             else:
-                print(f"🛑 触发手机号中断（后备逻辑）")
+                print(f" 触发手机号中断（后备逻辑）")
                 interrupt({
                     "type": "phone",
                     "message": "未能识别到有效的手机号码。请提供被调查人员的手机号码（11位数字，如：13812345678）"
@@ -276,8 +303,8 @@ class PrivacyWorkflow:
                 
             if not type_specified or confidence == "low" or needs_confirmation:
                 # 需要用户确认隐私号类型
-                print(f"🛑 触发类型确认中断")
-                interrupt({
+                print(f" 触发类型确认中断")
+                user_input = interrupt({
                     "type": "type",
                     "message": f"""
                         请选择隐私号类型：
@@ -295,6 +322,9 @@ class PrivacyWorkflow:
                         请输入 '1' 选择可回拨，或输入 '2' 选择不可回拨：
                         """
                 })
+                print(f"用户输入: {user_input}")
+                state["user_input"] = f"{state['user_input']}; 用户选择隐私号类型结果：{user_input}; ( '1' 代表可回拨， '2' 代表不可回拨)"
+                return self._confirm_privacy_type(state, config)
                 
         except Exception as e:
             print(f"解析结果失败: {e}")
@@ -356,7 +386,7 @@ class PrivacyWorkflow:
             print(f" {stage} 思考中...")
             
             # 调用模型
-            response = self.thinking_model.invoke([HumanMessage(content=prompt)])
+            response = self.thinking_model.invoke([HumanMessage(content=prompt)], config={"callbacks": [self.handler], "langfuse_session_id": "session-1","langfuse_user_id": "user-1"})
             
             # 提取思考过程（如果有的话）
             thinking_content = ""
@@ -407,7 +437,9 @@ class PrivacyWorkflow:
         except (json.JSONDecodeError, ValueError) as e:
             print(f"JSON解析失败: {e}")
             raise
-    
+
+
+
     def _fallback_business_check(self, user_input: str) -> bool:
         """后备的业务相关性检查"""
         business_keywords = ["隐私号", "调查", "手机号", "拨打", "回拨", "路由", "匿名", "保护", "身份"]
@@ -483,7 +515,7 @@ class PrivacyWorkflow:
             thinking_process=[]
         )
         
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable": {"thread_id": thread_id}, "callbacks": [self.handler], "langfuse_session_id": "session-1","langfuse_user_id": "user-1"}
         
         print(f"\n{'='*50}")
         print(f" 开始隐私号处理工作流")
@@ -603,5 +635,12 @@ if __name__ == "__main__":
     user_input = input("\n请输入您的请求：")
     result = workflow.run_workflow(user_input)
     
+    # 短生命周期脚本：尽量 flush Langfuse 事件
+    try:
+        if hasattr(workflow, "langfuse_client"):
+            workflow.langfuse_client.flush()
+    except Exception:
+        pass
+
     print(f"\n最终结果：")
     print(json.dumps(result, ensure_ascii=False, indent=2))
