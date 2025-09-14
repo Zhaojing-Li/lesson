@@ -24,14 +24,14 @@ class LinearRegression(nn.Module):
         self.linear = nn.Linear(1, 1)
 
     def forward(self, x):
-        return self.linear(x)
+        return self.linear(x) # 返回线性回归的结果，前向运算
 
 
 # 训练设置
-model = LinearRegression()
-criterion = nn.MSELoss()
-optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
-epochs = 1000
+model = LinearRegression() # 定义模型
+criterion = nn.MSELoss()   # 均方误差损失函数
+optimizer = torch.optim.SGD(model.parameters(), lr=0.01) # 随机梯度下降优化器  lr是学习率，步长
+epochs = 1000 # 训练次数 
 
 # 训练循环
 for epoch in range(epochs):
